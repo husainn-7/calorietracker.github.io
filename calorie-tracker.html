@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Plate — nightly food log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Rajdhani:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --night:#04070d;
+    --card:rgba(11,17,28,.62);
+    --card-solid:#0b111c;
+    --paper:#0c1320;               /* input / track surface */
+    --ink:#e7ecf4;                 /* primary text (light) */
+    --ink-soft:#8493a8;
+    --line:rgba(122,140,170,.20);
+    --signal:#f0bf57; --signal-dim:#b8923c; --glow:rgba(240,191,87,.4);
+    /* day-bar meal shades (gold gradient) */
+    --leaf:#f0bf57; --leaf-2:#cda23f; --leaf-3:#a8842f; --leaf-4:#6f5c2c;
+    /* macros */
+    --m-protein:#6f9bd1; --m-carbs:#f0bf57; --m-fat:#e0654a;
+    --clay:#e0654a;                /* over goal / goal line */
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:var(--night); color:var(--ink);
+    font-family:"Rajdhani",system-ui,sans-serif; line-height:1.45; min-height:100vh;
+    padding:clamp(14px,3vw,40px) clamp(12px,3vw,24px) 60px;
+    -webkit-font-smoothing:antialiased; position:relative;
+  }
+
+  /* ---------- cinematic backdrop ---------- */
+  #scene{position:fixed;inset:0;z-index:0;width:100%;height:100%;display:block}
+  #fx{position:fixed;inset:0;z-index:1;pointer-events:none}
+  .darken{position:fixed;inset:0;z-index:2;pointer-events:none;
+    background:linear-gradient(rgba(4,7,13,.5),rgba(4,7,13,.8)),radial-gradient(130% 120% at 50% 30%,transparent 45%,rgba(0,0,0,.6) 100%)}
+
+  .wrap{position:relative;z-index:10;max-width:680px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 4px}
+  .brand{display:flex;align-items:baseline;gap:.5rem;font-family:"Oswald",sans-serif;font-weight:700;font-size:1.5rem;letter-spacing:.04em;text-transform:uppercase}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--signal);display:inline-block;transform:translateY(-1px);box-shadow:0 0 10px var(--glow)}
+  .brand small{font-family:"Oswald";font-weight:400;font-size:.62rem;text-transform:uppercase;letter-spacing:.28em;color:var(--ink-soft)}
+
+  .datenav{display:flex;align-items:center;gap:6px}
+  .datenav button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);
+    width:34px;height:34px;border-radius:9px;display:grid;place-items:center;backdrop-filter:blur(6px);transition:border-color .15s,color .15s}
+  .datenav button:hover{border-color:var(--signal);color:var(--signal)}
+  .datenav button:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+  .datenav .label{font-family:"Oswald";font-weight:500;font-size:.9rem;letter-spacing:.06em;min-width:120px;text-align:center;text-transform:uppercase}
+  .datenav .today{width:auto;padding:0 12px;font-size:.68rem;text-transform:uppercase;letter-spacing:.14em;color:var(--signal);font-weight:600}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(10px);
+    box-shadow:0 18px 50px rgba(0,0,0,.4)}
+
+  /* ---------- summary ---------- */
+  .summary{padding:clamp(18px,4vw,26px)}
+  .summary-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+  .figure{display:flex;flex-direction:column}
+  .figure .big{font-family:"Oswald",sans-serif;font-weight:300;font-variant-numeric:tabular-nums;
+    font-size:clamp(2.8rem,12vw,4.4rem);line-height:.92;letter-spacing:.01em;text-shadow:0 0 30px rgba(231,236,244,.12)}
+  .figure .big.over{color:var(--clay);text-shadow:0 0 26px rgba(224,101,74,.25)}
+  .figure .cap{font-family:"Oswald";font-weight:400;text-transform:uppercase;letter-spacing:.14em;font-size:.74rem;color:var(--ink-soft);margin-top:4px}
+  .figure .cap b{color:var(--signal);font-weight:500}
+
+  .goal-edit{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+  .goal-edit label{font-family:"Oswald";font-size:.6rem;text-transform:uppercase;letter-spacing:.18em;color:var(--ink-soft);font-weight:500}
+  .goal-edit input{font-family:"Space Mono",monospace;font-weight:700;font-size:1.05rem;text-align:right;width:100px;
+    border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:9px;padding:6px 10px}
+  .goal-edit input:focus-visible{outline:2px solid var(--signal);outline-offset:1px;border-color:var(--signal)}
+
+  .daybar{margin-top:22px;height:16px;border-radius:8px;background:var(--paper);overflow:hidden;display:flex;border:1px solid var(--line)}
+  .daybar .seg{height:100%;transition:width .5s cubic-bezier(.4,0,.2,1)}
+  .daybar .seg.breakfast{background:var(--leaf-4)} .daybar .seg.lunch{background:var(--leaf-3)}
+  .daybar .seg.dinner{background:var(--leaf-2)} .daybar .seg.snacks{background:var(--leaf)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:11px}
+  .legend span{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--ink-soft)}
+  .legend i{width:9px;height:9px;border-radius:3px;display:inline-block}
+  .over-pill{margin-left:auto;font-family:"Space Mono",monospace;font-size:.7rem;font-weight:700;color:var(--clay);
+    border:1px solid var(--clay);border-radius:20px;padding:2px 9px}
+
+  .macros{margin-top:18px;padding-top:16px;border-top:1px dashed var(--line)}
+  .macrobar{height:8px;border-radius:5px;overflow:hidden;display:flex;background:var(--paper)}
+  .macrobar .p{background:var(--m-protein)} .macrobar .c{background:var(--m-carbs)} .macrobar .f{background:var(--m-fat)}
+  .macro-legend{display:flex;gap:18px;margin-top:10px;flex-wrap:wrap}
+  .macro-legend div{font-size:.8rem;color:var(--ink-soft)}
+  .macro-legend b{font-family:"Space Mono",monospace;color:var(--ink);font-weight:700;font-size:.86rem}
+  .macro-legend .k{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+
+  /* ---------- add ---------- */
+  .add{padding:14px}
+  .add .row{display:flex;gap:8px;flex-wrap:wrap}
+  .add input,.add select{font:inherit;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:10px;padding:10px 12px}
+  .add input::placeholder{color:var(--ink-soft)}
+  .add input:focus-visible,.add select:focus-visible{outline:2px solid var(--signal);outline-offset:1px;border-color:var(--signal)}
+  .add .name{flex:1 1 160px;min-width:0}
+  .add .kcal{width:90px;font-family:"Space Mono",monospace;font-weight:700}
+  .add .meal{flex:0 0 auto}
+  .add .addbtn{flex:0 0 auto;cursor:pointer;border:none;background:var(--signal);color:#0a0f17;font-family:"Oswald";
+    font-weight:600;letter-spacing:.08em;text-transform:uppercase;border-radius:10px;padding:10px 20px;transition:background .15s,transform .05s}
+  .add .addbtn:hover{background:#ffce6a;box-shadow:0 0 20px var(--glow)}
+  .add .addbtn:active{transform:translateY(1px)}
+  .add .addbtn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .macro-fields{display:flex;gap:8px;margin-top:8px}
+  .macro-fields label{flex:1;display:flex;flex-direction:column;gap:3px;font-family:"Oswald";font-size:.6rem;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-soft);font-weight:500}
+  .macro-fields input{width:100%;text-align:center;font-family:"Space Mono",monospace}
+  .toggle-macros{background:none;border:none;color:var(--signal);font-family:"Oswald";text-transform:uppercase;letter-spacing:.1em;font-size:.72rem;font-weight:500;cursor:pointer;padding:9px 4px 0}
+
+  /* ---------- ledger ---------- */
+  .ledger{padding:6px 0 8px}
+  .meal-group{padding:4px 0}
+  .meal-head{display:flex;align-items:baseline;justify-content:space-between;padding:10px clamp(16px,4vw,22px) 4px;font-family:"Oswald",sans-serif}
+  .meal-head .nm{font-weight:600;font-size:.74rem;text-transform:uppercase;letter-spacing:.16em;display:flex;align-items:center;gap:8px}
+  .meal-head .nm i{width:9px;height:9px;border-radius:3px}
+  .meal-head .sub{font-family:"Space Mono",monospace;font-weight:700;font-size:.82rem;color:var(--ink-soft)}
+  .item{display:flex;align-items:baseline;gap:8px;padding:7px clamp(16px,4vw,22px);font-size:1rem}
+  .item .lead{flex:1;border-bottom:1.5px dotted var(--line);transform:translateY(-4px);min-width:14px}
+  .item .nm{flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .val{font-family:"Space Mono",monospace;font-weight:700;font-size:.9rem;color:var(--ink)}
+  .item .macro{font-family:"Space Mono",monospace;font-size:.64rem;color:var(--ink-soft);flex:0 0 auto}
+  .item .del{border:none;background:none;cursor:pointer;color:var(--ink-soft);font-size:1rem;line-height:1;padding:2px 4px;border-radius:6px;flex:0 0 auto;opacity:.45;transition:opacity .15s,color .15s}
+  .item:hover .del,.item .del:focus-visible{opacity:1;color:var(--clay)}
+  .item .del:focus-visible{outline:2px solid var(--clay);outline-offset:1px}
+  .empty{text-align:center;color:var(--ink-soft);padding:30px 20px;font-size:.98rem}
+  .empty b{color:var(--ink);font-weight:600}
+
+  /* ---------- week ---------- */
+  .week{padding:clamp(16px,4vw,22px)}
+  .week h2{font-family:"Oswald",sans-serif;font-weight:600;font-size:.74rem;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-soft);margin-bottom:16px}
+  .week svg{width:100%;height:120px;display:block;overflow:visible}
+
+  footer{text-align:center;font-family:"Oswald";font-size:.64rem;text-transform:uppercase;letter-spacing:.22em;color:var(--ink-soft);padding-top:8px}
+  footer b{color:var(--signal);font-weight:500}
+
+  @media (max-width:480px){ .datenav .label{min-width:94px;font-size:.82rem} .add .kcal{width:74px} }
+  @media (prefers-reduced-motion:reduce){ .daybar .seg{transition:none} }
+</style>
+</head>
+<body>
+  <svg id="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
+  <canvas id="fx"></canvas>
+  <div class="darken"></div>
+
+  <div class="wrap">
+    <header>
+      <div class="brand"><span class="dot"></span>Plate <small>night log</small></div>
+      <div class="datenav">
+        <button id="prev" aria-label="Previous day">‹</button>
+        <span class="label" id="dateLabel">—</span>
+        <button id="next" aria-label="Next day">›</button>
+        <button class="today" id="todayBtn">Today</button>
+      </div>
+    </header>
+
+    <section class="card summary">
+      <div class="summary-top">
+        <div class="figure">
+          <span class="big" id="remaining">0</span>
+          <span class="cap" id="remainCap">kcal left · of <b id="goalCap">2,000</b> goal</span>
+        </div>
+        <div class="goal-edit">
+          <label for="goalInput">Daily goal</label>
+          <input id="goalInput" type="number" inputmode="numeric" min="0" step="50" value="2000" />
+        </div>
+      </div>
+      <div class="daybar" id="daybar" aria-hidden="true"></div>
+      <div class="legend" id="legend"></div>
+      <div class="macros" id="macros" hidden>
+        <div class="macrobar" id="macrobar" aria-hidden="true"></div>
+        <div class="macro-legend" id="macroLegend"></div>
+      </div>
+    </section>
+
+    <section class="card add">
+      <div class="row">
+        <input class="name" id="fName" placeholder="What did you eat?" aria-label="Food name" />
+        <input class="kcal" id="fKcal" type="number" inputmode="numeric" min="0" placeholder="kcal" aria-label="Calories" />
+        <select class="meal" id="fMeal" aria-label="Meal">
+          <option value="breakfast">Breakfast</option><option value="lunch">Lunch</option>
+          <option value="dinner">Dinner</option><option value="snacks">Snacks</option>
+        </select>
+        <button class="addbtn" id="addBtn">Add</button>
+      </div>
+      <button class="toggle-macros" id="toggleMacros" aria-expanded="false">+ macros (optional)</button>
+      <div class="macro-fields" id="macroFields" hidden>
+        <label>Protein g<input id="fP" type="number" inputmode="numeric" min="0" placeholder="0" /></label>
+        <label>Carbs g<input id="fC" type="number" inputmode="numeric" min="0" placeholder="0" /></label>
+        <label>Fat g<input id="fF" type="number" inputmode="numeric" min="0" placeholder="0" /></label>
+      </div>
+    </section>
+
+    <section class="card ledger" id="ledger"></section>
+
+    <section class="card week">
+      <h2>This week</h2>
+      <svg id="weekChart" viewBox="0 0 700 120" preserveAspectRatio="none" aria-hidden="true"></svg>
+    </section>
+
+    <footer>Saved on this device · <b>Plate</b></footer>
+  </div>
+
+<script>
+(() => {
+  "use strict";
+  const reduce = matchMedia("(prefers-reduced-motion:reduce)").matches;
+
+  /* ===== dim Gotham backdrop ===== */
+  (function scene(){
+    const W=1600,H=900,g=900,R=(a,b)=>a+Math.random()*(b-a);
+    const sx=1150,sy=560,dx=900,dy=170; let s="";
+    s+=`<defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#02040a"/><stop offset="0.55" stop-color="#070d18"/><stop offset="1" stop-color="#0d1726"/></linearGradient>
+      <radialGradient id="poll" cx="50%" cy="100%" r="75%"><stop offset="0" stop-color="#2a2010" stop-opacity="0.5"/><stop offset="1" stop-color="#2a2010" stop-opacity="0"/></radialGradient>
+      <radialGradient id="moonG" cx="38%" cy="34%" r="68%"><stop offset="0" stop-color="#e8edf5"/><stop offset="0.6" stop-color="#b9c1d0"/><stop offset="1" stop-color="#7c8598"/></radialGradient>
+      <radialGradient id="halo" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="rgba(200,214,236,0.22)"/><stop offset="1" stop-color="rgba(200,214,236,0)"/></radialGradient>
+      <linearGradient id="beamG" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="rgba(245,232,200,0.32)"/><stop offset="0.6" stop-color="rgba(240,210,150,0.07)"/><stop offset="1" stop-color="rgba(240,210,150,0)"/></linearGradient>
+      <radialGradient id="disc" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="rgba(248,232,190,0.3)"/><stop offset="1" stop-color="rgba(240,191,87,0)"/></radialGradient>
+      <filter id="smog" x="-30%" y="-30%" width="160%" height="160%"><feTurbulence type="fractalNoise" baseFrequency="0.004 0.02" numOctaves="4" seed="4" stitchTiles="stitch" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0.28 0 0 0 0 0.22 0 0 0 0 0.15 0 0 0 0.9 0"/></filter>
+      <filter id="haze"><feGaussianBlur stdDeviation="3"/></filter>
+      <filter id="bb"><feGaussianBlur stdDeviation="10"/></filter>
+      <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+    </defs>`;
+    s+=`<rect width="${W}" height="${H}" fill="url(#sky)"/><rect y="${H*0.5}" width="${W}" height="${H*0.5}" fill="url(#poll)"/>`;
+    let st="";for(let i=0;i<48;i++){const x=R(0,W),y=R(0,H*0.5),r=R(0.4,1.2),o=R(0.15,0.5).toFixed(2);
+      const tw=!reduce&&Math.random()<0.4?`<animate attributeName="opacity" values="${o};${(o*0.3).toFixed(2)};${o}" dur="${R(3,6).toFixed(1)}s" repeatCount="indefinite"/>`:"";
+      st+=`<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r.toFixed(1)}" fill="#dfe6f0" opacity="${o}">${tw}</circle>`;}
+    s+=`<g>${st}</g>`;
+    const mx=1250,my=170,mr=60;
+    s+=`<circle cx="${mx}" cy="${my}" r="${mr*2.3}" fill="url(#halo)"/><circle cx="${mx}" cy="${my}" r="${mr}" fill="url(#moonG)"/>`;
+    s+=`<g opacity="0.22" fill="#7d8699"><circle cx="${mx-18}" cy="${my-12}" r="8"/><circle cx="${mx+14}" cy="${my+7}" r="11"/><circle cx="${mx+3}" cy="${my-22}" r="5"/></g>`;
+    const beam=reduce?"":`<animateTransform attributeName="transform" type="rotate" values="-4 ${sx} ${sy}; 5 ${sx} ${sy}; -4 ${sx} ${sy}" dur="16s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1"/>`;
+    s+=`<g style="mix-blend-mode:screen">${beam}<g filter="url(#bb)" opacity="0.5"><polygon points="${sx-13},${sy} ${sx+13},${sy} ${dx+150},${dy} ${dx-150},${dy}" fill="url(#beamG)"/></g><ellipse cx="${dx}" cy="${dy}" rx="150" ry="90" fill="url(#disc)"/></g>`;
+    s+=`<circle cx="${sx}" cy="${sy}" r="5" fill="#f8edcf"/><circle cx="${sx}" cy="${sy}" r="14" fill="url(#disc)"/>`;
+    function layer(o){let out="",x=-30;while(x<W+30){const w=R(o.minW,o.maxW),h=R(o.minH,o.maxH),y=o.base-h;
+      out+=`<rect x="${x.toFixed(0)}" y="${y.toFixed(0)}" width="${w.toFixed(0)}" height="${(o.base-y).toFixed(0)}" fill="${o.fill}"/>`;
+      if(o.win){for(let cx=x+6;cx<x+w-6;cx+=o.gx)for(let cy=y+8;cy<o.base-4;cy+=o.gy)if(Math.random()<o.ch){
+        const tw=!reduce&&Math.random()<0.12?`<animate attributeName="opacity" values="${R(0.4,0.8).toFixed(2)};0.06;${R(0.4,0.8).toFixed(2)}" dur="${R(2,7).toFixed(1)}s" repeatCount="indefinite"/>`:"";
+        out+=`<rect x="${cx.toFixed(0)}" y="${cy.toFixed(0)}" width="3" height="5" fill="#f0c46a" opacity="${R(0.3,0.8).toFixed(2)}">${tw}</rect>`;}}
+      x+=w-R(2,10);}return out;}
+    s+=`<g filter="url(#haze)" opacity="0.55">${layer({base:740,minW:40,maxW:90,minH:90,maxH:230,fill:"#121d2b"})}</g>`;
+    s+=`<g opacity="0.92">${layer({base:905,minW:60,maxW:150,minH:200,maxH:430,fill:"#04070d",gx:18,gy:22,ch:0.1,win:true})}</g>`;
+    const bc=reduce?"":`<animate attributeName="opacity" values="1;0.2;1" dur="2.2s" repeatCount="indefinite"/>`;
+    s+=`<g><rect x="${1095}" y="${g-470}" width="110" height="470" fill="#03060b"/><rect x="${1140}" y="${g-540}" width="20" height="74" fill="#03060b"/><circle cx="1150" cy="${g-540}" r="3.5" fill="#ff5a4d">${bc}</circle></g>`;
+    const sm=reduce?"":`<animateTransform attributeName="transform" type="translate" values="0 0; 150 0; 0 0" dur="52s" repeatCount="indefinite"/>`;
+    s+=`<g opacity="0.35" style="mix-blend-mode:screen"><rect x="-300" y="${g-240}" width="${W+600}" height="280" filter="url(#smog)"/>${sm}</g>`;
+    s+=`<rect width="${W}" height="${H}" filter="url(#grain)" opacity="0.05" style="mix-blend-mode:overlay"/>`;
+    document.getElementById("scene").innerHTML=s;
+  })();
+
+  /* ===== subtle bats ===== */
+  const cv=document.getElementById("fx"),ctx=cv.getContext("2d");let CW,CH,bats=[];
+  function rz(){CW=cv.width=innerWidth*devicePixelRatio;CH=cv.height=innerHeight*devicePixelRatio;cv.style.width=innerWidth+"px";cv.style.height=innerHeight+"px";}
+  rz();
+  function bat(any){const dir=Math.random()>.5?1:-1;bats.push({x:any?Math.random()*CW:(dir>0?-50:CW+50),y:R0(0.05,0.32)*CH,vx:dir*(0.4+Math.random()*0.9)*devicePixelRatio,s:(0.6+Math.random()*1.1)*devicePixelRatio,ph:Math.random()*6.28,dir});}
+  function R0(a,b){return a+Math.random()*(b-a);}
+  function seed(){bats=[];for(let i=0;i<4;i++)bat(true);}
+  function draw(b){const fl=0.45+Math.abs(Math.sin(b.ph))*1.2;ctx.save();ctx.translate(b.x,b.y);ctx.scale(b.s*b.dir,b.s);ctx.beginPath();ctx.moveTo(0,0);ctx.quadraticCurveTo(-7,-5*fl,-15,-1);ctx.quadraticCurveTo(-9,2,-6,7);ctx.quadraticCurveTo(-4,1,0,4);ctx.quadraticCurveTo(4,1,6,7);ctx.quadraticCurveTo(9,2,15,-1);ctx.quadraticCurveTo(7,-5*fl,0,0);ctx.closePath();ctx.fillStyle="rgba(6,9,14,.85)";ctx.fill();ctx.restore();}
+  function frame(){ctx.clearRect(0,0,CW,CH);for(const b of bats){b.x+=b.vx;b.ph+=0.24;b.y+=Math.sin(b.ph*0.5)*0.3*devicePixelRatio;draw(b);}bats=bats.filter(b=>b.x>-70&&b.x<CW+70);while(bats.length<4)bat(false);requestAnimationFrame(frame);}
+  if(!reduce){seed();requestAnimationFrame(frame);addEventListener("resize",()=>{rz();seed();});}else addEventListener("resize",rz);
+
+  /* ===== app ===== */
+  const MEALS=[["breakfast","Breakfast"],["lunch","Lunch"],["dinner","Dinner"],["snacks","Snacks"]];
+  const SEG={breakfast:"--leaf-4",lunch:"--leaf-3",dinner:"--leaf-2",snacks:"--leaf"};
+  const cssv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const fmt=n=>Math.round(n).toLocaleString("en-US");
+  const store={get(k){try{const v=localStorage.getItem(k);return v==null?null:JSON.parse(v);}catch(e){return null;}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
+
+  let day=new Date();day.setHours(0,0,0,0);
+  let goal=store.get("plate:goal");if(goal==null||isNaN(goal))goal=2000;
+  const pad=n=>String(n).padStart(2,"0");
+  const key=d=>`plate:day:${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const loadDay=d=>store.get(key(d))||[];
+  const saveDay=(d,a)=>store.set(key(d),a);
+  const same=(a,b)=>a.toDateString()===b.toDateString();
+  const $=id=>document.getElementById(id);
+  $("goalInput").value=goal;
+
+  function addEntry(){
+    const name=$("fName").value.trim(),kcal=parseInt($("fKcal").value,10);
+    if(!name||isNaN(kcal)||kcal<0){$(name?"fKcal":"fName").focus();return;}
+    const p=parseInt($("fP").value,10),c=parseInt($("fC").value,10),f=parseInt($("fF").value,10);
+    const a=loadDay(day);
+    a.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,6),name,kcal,meal:$("fMeal").value,p:isNaN(p)?null:p,c:isNaN(c)?null:c,f:isNaN(f)?null:f});
+    saveDay(day,a);
+    ["fName","fKcal","fP","fC","fF"].forEach(i=>$(i).value="");$("fName").focus();render();
+  }
+  const removeEntry=id=>{saveDay(day,loadDay(day).filter(e=>e.id!==id));render();};
+
+  function render(){
+    $("dateLabel").textContent=same(day,new Date())?"Today":day.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
+    const a=loadDay(day),total=a.reduce((s,e)=>s+e.kcal,0),left=goal-total;
+    const big=$("remaining");
+    if(left>=0){big.classList.remove("over");big.textContent=fmt(left);$("remainCap").innerHTML=`kcal left · of <b>${fmt(goal)}</b> goal`;}
+    else{big.classList.add("over");big.textContent=fmt(-left);$("remainCap").innerHTML=`kcal over · of <b>${fmt(goal)}</b> goal`;}
+    $("goalCap").textContent=fmt(goal);
+
+    const bar=$("daybar");bar.innerHTML="";const denom=Math.max(goal,1);
+    MEALS.forEach(([m])=>{const mt=a.filter(e=>e.meal===m).reduce((s,e)=>s+e.kcal,0);if(mt<=0)return;
+      const seg=document.createElement("div");seg.className="seg "+m;seg.style.width=Math.min(100,mt/denom*100)+"%";bar.appendChild(seg);});
+    const leg=$("legend");leg.innerHTML="";
+    MEALS.forEach(([m,l])=>{const mt=a.filter(e=>e.meal===m).reduce((s,e)=>s+e.kcal,0);const sp=document.createElement("span");sp.innerHTML=`<i style="background:${cssv(SEG[m])}"></i>${l} ${fmt(mt)}`;leg.appendChild(sp);});
+    if(total>goal){const p=document.createElement("span");p.className="over-pill";p.textContent="over by "+fmt(total-goal);leg.appendChild(p);}
+
+    const P=a.reduce((s,e)=>s+(e.p||0),0),C=a.reduce((s,e)=>s+(e.c||0),0),F=a.reduce((s,e)=>s+(e.f||0),0);
+    if(P+C+F>0){$("macros").hidden=false;const kp=P*4,kc=C*4,kf=F*9,kt=Math.max(kp+kc+kf,1);
+      $("macrobar").innerHTML=`<div class="p" style="width:${kp/kt*100}%"></div><div class="c" style="width:${kc/kt*100}%"></div><div class="f" style="width:${kf/kt*100}%"></div>`;
+      $("macroLegend").innerHTML=`<div><span class="k" style="background:${cssv('--m-protein')}"></span>Protein <b>${fmt(P)}g</b></div><div><span class="k" style="background:${cssv('--m-carbs')}"></span>Carbs <b>${fmt(C)}g</b></div><div><span class="k" style="background:${cssv('--m-fat')}"></span>Fat <b>${fmt(F)}g</b></div>`;
+    }else $("macros").hidden=true;
+
+    const led=$("ledger");led.innerHTML="";
+    if(a.length===0){led.innerHTML=`<div class="empty"><b>Nothing logged yet.</b><br>Add your first item above.</div>`;}
+    else MEALS.forEach(([m,l])=>{const items=a.filter(e=>e.meal===m);if(!items.length)return;
+      const mt=items.reduce((s,e)=>s+e.kcal,0);const grp=document.createElement("div");grp.className="meal-group";
+      grp.innerHTML=`<div class="meal-head"><span class="nm"><i style="background:${cssv(SEG[m])}"></i>${l}</span><span class="sub">${fmt(mt)}</span></div>`;
+      items.forEach(e=>{const macro=(e.p||e.c||e.f)?`<span class="macro">${e.p||0}p ${e.c||0}c ${e.f||0}f</span>`:"";
+        const row=document.createElement("div");row.className="item";
+        row.innerHTML=`<span class="nm"></span><span class="lead"></span>${macro}<span class="val">${fmt(e.kcal)}</span><button class="del" aria-label="Remove">✕</button>`;
+        row.querySelector(".nm").textContent=e.name;row.querySelector(".del").addEventListener("click",()=>removeEntry(e.id));grp.appendChild(row);});
+      led.appendChild(grp);});
+
+    week();
+  }
+  function week(){
+    const days=[];let max=goal;
+    for(let i=6;i>=0;i--){const d=new Date(day);d.setDate(d.getDate()-i);const t=loadDay(d).reduce((s,e)=>s+e.kcal,0);days.push({d,t});if(t>max)max=t;}
+    const W=700,H=120,n=7,gap=18,bw=(W-gap*(n-1))/n,y=v=>H-(v/max)*(H-22);let svg="";
+    const gy=y(goal);
+    svg+=`<line x1="0" y1="${gy}" x2="${W}" y2="${gy}" stroke="${cssv('--clay')}" stroke-width="1.5" stroke-dasharray="4 5" opacity="0.7"/>`;
+    svg+=`<text x="${W}" y="${gy-5}" text-anchor="end" font-family="Space Mono,monospace" font-size="11" fill="${cssv('--clay')}">goal ${fmt(goal)}</text>`;
+    days.forEach((o,i)=>{const x=i*(bw+gap),h=Math.max(o.t>0?3:0,H-y(o.t)),by=H-h,sel=same(o.d,day),col=sel?cssv('--leaf'):cssv('--leaf-3');
+      if(o.t>0)svg+=`<rect x="${x}" y="${by}" width="${bw}" height="${h}" rx="5" fill="${col}"/>`;
+      else svg+=`<rect x="${x}" y="${H-3}" width="${bw}" height="3" rx="1.5" fill="${cssv('--line')}"/>`;
+      svg+=`<text x="${x+bw/2}" y="${H+15}" text-anchor="middle" font-family="Oswald,sans-serif" font-size="11" font-weight="${sel?600:400}" fill="${sel?cssv('--ink'):cssv('--ink-soft')}">${o.d.toLocaleDateString('en-US',{weekday:'short'}).slice(0,2)}</text>`;
+      if(o.t>0)svg+=`<text x="${x+bw/2}" y="${by-6}" text-anchor="middle" font-family="Space Mono,monospace" font-size="11" font-weight="700" fill="${cssv('--ink-soft')}">${fmt(o.t)}</text>`;});
+    $("weekChart").innerHTML=svg;
+  }
+
+  $("addBtn").addEventListener("click",addEntry);
+  ["fName","fKcal","fP","fC","fF"].forEach(id=>$(id).addEventListener("keydown",e=>{if(e.key==="Enter")addEntry();}));
+  $("prev").addEventListener("click",()=>{day.setDate(day.getDate()-1);render();});
+  $("next").addEventListener("click",()=>{day.setDate(day.getDate()+1);render();});
+  $("todayBtn").addEventListener("click",()=>{day=new Date();day.setHours(0,0,0,0);render();});
+  $("goalInput").addEventListener("change",()=>{const v=parseInt($("goalInput").value,10);goal=isNaN(v)||v<0?0:v;store.set("plate:goal",goal);render();});
+  $("toggleMacros").addEventListener("click",()=>{const f=$("macroFields"),open=f.hidden;f.hidden=!open;$("toggleMacros").setAttribute("aria-expanded",String(open));$("toggleMacros").textContent=open?"– hide macros":"+ macros (optional)";});
+
+  render();
+})();
+</script>
+</body>
+</html>
